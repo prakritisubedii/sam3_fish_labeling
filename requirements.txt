@@ -1,0 +1,9 @@
+# sam3 itself is not listed here -- install it separately from
+# https://github.com/facebookresearch/sam3 (see README.md).
+opencv-python
+numpy
+Pillow
+torch
+ensemble-boxes
+filterpy
+scipy

@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Fish-detection experiment scratch output (regenerate via run_experiments*.py /
+# diagnostics/*.py -- curated highlights are checked into results/ instead)
+/outputs/
+
+.venv/
+venv/
