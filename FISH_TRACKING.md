@@ -88,17 +88,13 @@ colored red/orange/green by the stability rule.
 - `results/comparisons/` — before/after frames from the threshold/prompt
   sweep (`scripts/run_experiments*.py`).
 - `results/sweep_summary.json` — per-run detection stats for that sweep.
-- `results/diagnostic_tiling/` — the two crop images `KNOWN_LIMITATIONS.md`
-  cites as evidence for the dense-schooling-fish miss.
 - `results/test_clip1_output.mp4` — a pre-rendered
-  `scripts/test_sam3_video.py` run, so you can see the native tracker's
-  output without a GPU.
-- `results/test_fish_output.png` — a pre-rendered `scripts/test_sam3.py`
-  run, from the same source frame as `assets/test_fish.png`.
+  `scripts/test_sam3_video.py` run, so the native tracker's output can be
+  seen without a GPU.
 
 Everything else under `outputs/` is regenerable scratch space (raw extracted
-frames, full per-run detection dumps) and is gitignored — expect several GB
-if you run the full sweep.
+frames, full per-run detection dumps) and is gitignored — running the full
+sweep produces several GB of it.
 
 ## Known limitations
 
@@ -126,7 +122,7 @@ actually works. Each is described here instead of shipping the script:
   `diagnostic_tiling_crop.py`) — cropping to just the region a fish sits in,
   to give it more effective resolution after SAM3's fixed 1008x1008 resize.
   Tested directly on the hardest schooling-fish cluster; still missed even at
-  large zoom (see `results/diagnostic_tiling/` and `KNOWN_LIMITATIONS.md`).
+  large zoom (see `KNOWN_LIMITATIONS.md`).
 - **IoU+Kalman tracking as the primary tracker** (would-be
   `track_active_reprompt.py`, `track_full_clip_validation.py`) — a
   from-scratch SORT-style tracker over independent per-frame WBF detections,

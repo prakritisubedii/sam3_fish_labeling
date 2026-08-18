@@ -14,15 +14,6 @@ surrounding loose school of small, pale fish that's missed. Likely present at
 other similar schooling moments in this and other clips too, not just this
 one frame.
 
-Visual evidence (already in the repo):
-- `results/diagnostic_tiling/frame0_cluster_zoom.png` — 4x zoomed
-  crop of the region. The school is visible to the eye as faint, blurry
-  streaks around the one large, clearly-detected fish.
-- `results/diagnostic_tiling/frame0_tightcrop_detected.png` — SAM3
-  run on a tight, heavily-zoomed crop of just this region. Still only finds
-  the one large fish; the school is still missed even with far more relative
-  resolution per fish than the model sees in the full frame.
-
 **Why this isn't a quick fix — what was ruled out** (all tested this
 session, zero-shot only, no fine-tuning data available):
 - Confidence threshold (0.5 / 0.3 / 0.2 for a fixed prompt gave *identical*
@@ -32,7 +23,8 @@ session, zero-shot only, no fine-tuning data available):
 - CLAHE / underwater contrast-correction preprocessing (no improvement,
   slightly worse overall)
 - Targeted tiling/cropping for resolution — tested directly on this exact
-  cluster, still missed even at large zoom (see the two images above)
+  cluster (4x zoomed crop, then SAM3 rerun on a tight heavily-zoomed crop of
+  just that region), still missed even at large zoom
 - SAM3 ensemble + WBF (current production recipe) — still missed
 
 Ruling out resolution and prompt-coverage leaves the most likely explanation
