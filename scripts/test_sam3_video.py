@@ -10,7 +10,7 @@ from sam3.model_builder import build_sam3_video_predictor
 import sam3_predictor_patch  # noqa: F401 -- applies threshold-routing patch before building the predictor
 
 VIDEO_PATH = "assets/fish_data/clip1.mp4"
-OUTPUT_PATH = "test_clip1_output.mp4"
+OUTPUT_PATH = "results/test_clip1_output.mp4"
 PROMPT = "fish"
 
 predictor = build_sam3_video_predictor(gpus_to_use=[0])

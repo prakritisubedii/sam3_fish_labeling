@@ -1,9 +1,9 @@
-# Known limitations — SAM3 fish detection (production recipe: `ensemble_wbf.py`)
+# Known limitations — SAM3 fish detection (production recipe: `scripts/ensemble_wbf.py`)
 
 ## Dense, tightly-schooling, motion-blurred fish are not detected
 
 **What**: the production detection recipe (SAM3 prompted with `"fish"` and
-`"small fish"`, fused with weighted box fusion — see `ensemble_wbf.py`) does
+`"small fish"`, fused with weighted box fusion — see `scripts/ensemble_wbf.py`) does
 not detect individual fish within a dense, tightly-packed school when the
 fish are small and motion-blurred. This is expected, not a bug to chase.
 

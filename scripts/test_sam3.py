@@ -9,7 +9,7 @@ torch.autocast("cuda", dtype=torch.bfloat16).__enter__()
 
 model = build_sam3_image_model()
 processor = Sam3Processor(model)
-image = Image.open("test_fish.png")
+image = Image.open("assets/test_fish.png")
 state = processor.set_image(image)
 output = processor.set_text_prompt(state=state, prompt="fish")
 masks, boxes, scores = output["masks"], output["boxes"], output["scores"]
@@ -36,5 +36,5 @@ for i in range(len(scores)):
     draw.text((box[0], max(box[1] - 15, 0)), f"{scores[i]:.2f}", fill=(255, 0, 0, 255))
 
 vis = Image.alpha_composite(vis, overlay).convert("RGB")
-vis.save("test_fish_output.png")
-print("Saved visualization to test_fish_output.png")
+vis.save("results/test_fish_output.png")
+print("Saved visualization to results/test_fish_output.png")

@@ -10,21 +10,23 @@ tried and deliberately left out, and why.
 
 ## Production detection pipeline
 
-**`ensemble_wbf.py`** is the recipe `KNOWN_LIMITATIONS.md` refers to as
-"production": SAM3 is prompted twice per frame (`"fish"` and `"small fish"`),
-and the two detection sets are merged with weighted box fusion
-(`ensemble_boxes.weighted_boxes_fusion`) rather than naive NMS, so a fish
-either prompt independently finds isn't dropped just because the other prompt
-also found it with a slightly different box. `ensemble_wbf_clahe.py` is the
-same recipe with CLAHE contrast correction applied to frames first — kept
-because it's a real variant worth comparing, even though `KNOWN_LIMITATIONS.md`
-found it doesn't fix the hardest case (dense motion-blurred schools).
+**`scripts/ensemble_wbf.py`** is the recipe `KNOWN_LIMITATIONS.md` refers to
+as "production": SAM3 is prompted twice per frame (`"fish"` and
+`"small fish"`), and the two detection sets are merged with weighted box
+fusion (`ensemble_boxes.weighted_boxes_fusion`) rather than naive NMS, so a
+fish either prompt independently finds isn't dropped just because the other
+prompt also found it with a slightly different box.
+`scripts/ensemble_wbf_clahe.py` is the same recipe with CLAHE contrast
+correction applied to frames first — kept because it's a real variant worth
+comparing, even though `KNOWN_LIMITATIONS.md` found it doesn't fix the
+hardest case (dense motion-blurred schools).
 
-Both depend on `experiment_common.py` (shared render/summarize helpers,
-`OUTPUT_ROOT = outputs/`) and `extract_frames.py` (frame-cache extraction) —
-keep those two alongside them.
+Both depend on `scripts/experiment_common.py` (shared render/summarize
+helpers, `OUTPUT_ROOT = outputs/`) and `scripts/extract_frames.py`
+(frame-cache extraction) — keep those two alongside them.
 
-`run_experiments.py` / `run_experiments_enhanced.py` are the sweep harness
+`scripts/run_experiments.py` / `scripts/run_experiments_enhanced.py` are the
+sweep harness
 that generated the threshold/prompt comparison grid — this is what produced
 `results/comparisons/` and `results/sweep_summary.json` (a renamed copy of
 their `outputs/index.json`). Re-running them regenerates the full
@@ -43,39 +45,40 @@ clip, not just detect them per-frame:
   the Kalman tracker, and 6 objects recovered their own identity after a
   real gap with no help, because the native tracker has actual appearance
   memory of each fish instead of just matching box positions frame to
-  frame. See `diagnostics/render_native_tracker_video.py`, which renders
-  this directly from a live SAM3 session (persistent color per object id).
+  frame. See `scripts/diagnostics/render_native_tracker_video.py`, which
+  renders this directly from a live SAM3 session (persistent color per
+  object id).
 - **A single native session still OOMs partway through the clip.** The fix is
   chunked sessions — process the clip in bounded-length chunks, each its own
   SAM3 video session, then stitch track identities across chunk boundaries
   by IoU-matching the last frame of chunk *N* against the first frame of
   chunk *N+1*. This gets 100% clip coverage where a single full-clip session
-  couldn't. See `diagnostics/chunked_native_tracker.py` (the core
+  couldn't. See `scripts/diagnostics/chunked_native_tracker.py` (the core
   implementation, writes `merged_tracks.json`) and
   `chunked_native_tracker_masked.py` (a self-contained rerun that renders the
   same chunked+stitched result with masks, not just box outlines).
 
 All three of these scripts build a `Sam3VideoPredictor` and depend on
-[`sam3_predictor_patch.py`](sam3_predictor_patch.py) (imported at the top of
-each) to make their requested `output_prob_thresh`/`new_det_thresh`/
-`det_nms_thresh` actually take effect — see that file for why upstream SAM3
-needs this.
+[`scripts/sam3_predictor_patch.py`](scripts/sam3_predictor_patch.py)
+(imported at the top of each) to make their requested
+`output_prob_thresh`/`new_det_thresh`/`det_nms_thresh` actually take effect
+— see that file for why upstream SAM3 needs this.
 
 ## False-positive filtering
 
-`diagnostics/temporal_stability_filter.py` reads
-`outputs/ensemble_wbf/detections.json` (run `ensemble_wbf.py` first), turns
-it into per-track box histories using the Kalman/IoU tracker in
-`track_flicker_smoothing.py` (kept as a dependency for this — see
-[Investigated but not included](#investigated-but-not-included) for why that
-tracker isn't used as the primary tracker itself), then scores each track by
-how much its size/shape/contrast vary over its lifetime. Static false
-positives (coral, rock) sit still and look nearly identical frame to frame —
-genuinely low variance — which separates them from real fish even when a
-confidence-threshold cut can't. It caught a real 253-frame-long static false
-positive that a confidence filter alone missed. `temporal_stability_video.py`
-renders the result across the full clip, colored red/orange/green by the
-stability rule.
+`scripts/diagnostics/temporal_stability_filter.py` reads
+`outputs/ensemble_wbf/detections.json` (run `scripts/ensemble_wbf.py`
+first), turns it into per-track box histories using the Kalman/IoU tracker
+in `scripts/track_flicker_smoothing.py` (kept as a dependency for this — see
+[Investigated but not included](#investigated-but-not-included) for why
+that tracker isn't used as the primary tracker itself), then scores each
+track by how much its size/shape/contrast vary over its lifetime. Static
+false positives (coral, rock) sit still and look nearly identical frame to
+frame — genuinely low variance — which separates them from real fish even
+when a confidence-threshold cut can't. It caught a real 253-frame-long
+static false positive that a confidence filter alone missed.
+`temporal_stability_video.py` renders the result across the full clip,
+colored red/orange/green by the stability rule.
 
 ## Results
 
@@ -83,12 +86,15 @@ stability rule.
 `KNOWN_LIMITATIONS.md`, small enough to check in directly:
 
 - `results/comparisons/` — before/after frames from the threshold/prompt
-  sweep (`run_experiments*.py`).
+  sweep (`scripts/run_experiments*.py`).
 - `results/sweep_summary.json` — per-run detection stats for that sweep.
 - `results/diagnostic_tiling/` — the two crop images `KNOWN_LIMITATIONS.md`
   cites as evidence for the dense-schooling-fish miss.
-- `test_clip1_output.mp4` (repo root) — a pre-rendered `test_sam3_video.py`
-  run, so you can see the native tracker's output without a GPU.
+- `results/test_clip1_output.mp4` — a pre-rendered
+  `scripts/test_sam3_video.py` run, so you can see the native tracker's
+  output without a GPU.
+- `results/test_fish_output.png` — a pre-rendered `scripts/test_sam3.py`
+  run, from the same source frame as `assets/test_fish.png`.
 
 Everything else under `outputs/` is regenerable scratch space (raw extracted
 frames, full per-run detection dumps) and is gitignored — expect several GB
@@ -129,7 +135,7 @@ actually works. Each is described here instead of shipping the script:
   fish in the clip still fragmented into 3 separate track IDs under pure
   Kalman-coasting. Superseded entirely by the native-SAM3-session + chunking
   approach above, which held identity far better without a hand-rolled
-  tracker. `track_flicker_smoothing.py` (the base Kalman/IoU tracker these
+  tracker. `scripts/track_flicker_smoothing.py` (the base Kalman/IoU tracker these
   build on) *is* kept, but only as plumbing `temporal_stability_filter.py`
   reuses to get per-track box histories — not as a tracker in its own right.
 - **"High variance positively confirms a real fish" (the flipped

@@ -28,24 +28,34 @@ result and why it isn't a quick fix.
    `/sbin/ldconfig -p`, which doesn't exist on NixOS). Not needed on a
    standard Linux box with the NVIDIA driver installed normally.
 
+## Layout
+
+- `scripts/` — every pipeline script (`scripts/diagnostics/` for the
+  tracking/false-positive-filter diagnostics).
+- `assets/` — inputs: `fish_data/clip1.mp4` (the test clip) and
+  `test_fish.png` (single-frame smoke-test input).
+- `results/` — everything a script produces that's worth keeping: rendered
+  videos, comparison images, sweep summaries. Regenerable scratch output
+  goes to `outputs/` instead, which is gitignored.
+
 All scripts assume they're run with this repo's root as the working
-directory, e.g. `python ensemble_wbf.py` or
-`python diagnostics/chunked_native_tracker.py`.
+directory, e.g. `python scripts/ensemble_wbf.py` or
+`python scripts/diagnostics/chunked_native_tracker.py`.
 
 ## Important: apply the predictor patch
 
 Upstream SAM3's `Sam3VideoPredictor` has two bugs that make requested
 detection thresholds silently do nothing (see
-[`sam3_predictor_patch.py`](sam3_predictor_patch.py) for the full
-explanation). Every script here that builds a video predictor already
+[`scripts/sam3_predictor_patch.py`](scripts/sam3_predictor_patch.py) for the
+full explanation). Every script here that builds a video predictor already
 imports that patch module as its first local import, so nothing extra is
 required to run them — just don't skip that import if you copy code out of
 this repo into your own scripts.
 
 ## Quick start
 
-- `python test_sam3.py` — single-image text-prompted segmentation on
-  `test_fish.png`.
-- `python test_sam3_video.py` — native SAM3 video tracking over
-  `assets/fish_data/clip1.mp4`; `test_clip1_output.mp4` (checked in) shows
-  the expected output.
+- `python scripts/test_sam3.py` — single-image text-prompted segmentation on
+  `assets/test_fish.png`, writes `results/test_fish_output.png`.
+- `python scripts/test_sam3_video.py` — native SAM3 video tracking over
+  `assets/fish_data/clip1.mp4`; `results/test_clip1_output.mp4` (checked in)
+  shows the expected output.
