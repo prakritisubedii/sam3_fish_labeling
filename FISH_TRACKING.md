@@ -27,35 +27,24 @@ coral"`) and detection threshold, and is what produced
 regenerates the full `outputs/<run-name>/` folders these summaries were
 pulled from.
 
-## Tracking across the full clip
+## Tracking individual fish
 
-Two problems had to be solved to track individual fish across the whole
-clip, not just detect them per-frame:
+Native SAM3 video sessions beat an IoU+Kalman tracker: handing SAM3's own
+video predictor session responsibility for identity (instead of a
+from-scratch SORT-style IoU+Kalman tracker over independent per-frame
+detections) held fish identity far better in a head-to-head comparison —
+10 of 24 objects survived ≥80% of the frames processed, vs 0 of 549 for the
+Kalman tracker, and 6 objects recovered their own identity after a real gap
+with no help, because the native tracker has actual appearance memory of
+each fish instead of just matching box positions frame to frame. See
+`scripts/diagnostics/render_native_tracker_video.py`, which renders this
+directly from a live SAM3 session (persistent color per object id). If the
+video predictor session runs out of GPU memory partway through, the script
+finalizes the video with whatever frames it processed instead of crashing.
 
-- **Native SAM3 video sessions beat an IoU+Kalman tracker.** Handing SAM3's
-  own video predictor session responsibility for identity (instead of a
-  from-scratch SORT-style IoU+Kalman tracker over independent per-frame
-  detections) held fish identity far better in a head-to-head comparison:
-  10 of 24 objects survived ≥80% of the frames processed, vs 0 of 549 for
-  the Kalman tracker, and 6 objects recovered their own identity after a
-  real gap with no help, because the native tracker has actual appearance
-  memory of each fish instead of just matching box positions frame to
-  frame. See `scripts/diagnostics/render_native_tracker_video.py`, which
-  renders this directly from a live SAM3 session (persistent color per
-  object id).
-- **A single native session still OOMs partway through the clip.** The fix is
-  chunked sessions — process the clip in bounded-length chunks, each its own
-  SAM3 video session, then stitch track identities across chunk boundaries
-  by IoU-matching the last frame of chunk *N* against the first frame of
-  chunk *N+1*. This gets 100% clip coverage where a single full-clip session
-  couldn't. See `scripts/diagnostics/chunked_native_tracker.py` (the core
-  implementation, writes `merged_tracks.json`) and
-  `chunked_native_tracker_masked.py` (a self-contained rerun that renders the
-  same chunked+stitched result with masks, not just box outlines).
-
-All three of these scripts build a `Sam3VideoPredictor` and depend on
+This script depends on
 [`scripts/sam3_predictor_patch.py`](scripts/sam3_predictor_patch.py)
-(imported at the top of each) to make their requested
+(imported at the top) to make its requested
 `output_prob_thresh`/`new_det_thresh`/`det_nms_thresh` actually take effect
 — see that file for why upstream SAM3 needs this.
 
@@ -72,8 +61,6 @@ false positives (coral, rock) sit still and look nearly identical frame to
 frame — genuinely low variance — which separates them from real fish even
 when a confidence-threshold cut can't. It caught a real 253-frame-long
 static false positive that a confidence filter alone missed.
-`temporal_stability_video.py` renders the result across the full clip,
-colored red/orange/green by the stability rule.
 
 ## Results
 
@@ -125,8 +112,8 @@ limited to what actually works:
 - **A hand-rolled IoU+Kalman tracker as the primary tracker**, later
   extended with active re-prompting on tracking gaps — even the single most
   reliably-detected fish in the clip fragmented into 3 separate track IDs.
-  Superseded by the native-SAM3-session + chunking approach above, which
-  held identity far better without a hand-rolled tracker. The base tracker
+  Superseded by the native SAM3 video session approach above, which held
+  identity far better without a hand-rolled tracker. The base tracker
   (`scripts/track_flicker_smoothing.py`) is still kept, but only as plumbing
   the temporal-stability filter reuses to get per-track box histories, not
   as a tracker in its own right.

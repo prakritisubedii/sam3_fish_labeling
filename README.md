@@ -44,7 +44,7 @@ All scripts are run with the repository root as the working directory, for
 example:
 ```
 python scripts/ensemble_wbf.py
-python scripts/diagnostics/chunked_native_tracker.py
+python scripts/diagnostics/render_native_tracker_video.py
 ```
 
 ## Required: the predictor patch
