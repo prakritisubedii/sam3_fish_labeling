@@ -15,22 +15,17 @@ as "production": SAM3 is prompted twice per frame (`"fish"` and
 `"small fish"`), and the two detection sets are merged with weighted box
 fusion (`ensemble_boxes.weighted_boxes_fusion`) rather than naive NMS, so a
 fish either prompt independently finds isn't dropped just because the other
-prompt also found it with a slightly different box.
-`scripts/ensemble_wbf_clahe.py` is the same recipe with CLAHE contrast
-correction applied to frames first — kept because it's a real variant worth
-comparing, even though `KNOWN_LIMITATIONS.md` found it doesn't fix the
-hardest case (dense motion-blurred schools).
+prompt also found it with a slightly different box. It depends on
+`scripts/experiment_common.py` (shared render/summarize helpers,
+`OUTPUT_ROOT = outputs/`) and `scripts/extract_frames.py` (frame-cache
+extraction).
 
-Both depend on `scripts/experiment_common.py` (shared render/summarize
-helpers, `OUTPUT_ROOT = outputs/`) and `scripts/extract_frames.py`
-(frame-cache extraction) — keep those two alongside them.
-
-`scripts/run_experiments.py` / `scripts/run_experiments_enhanced.py` are the
-sweep harness
-that generated the threshold/prompt comparison grid — this is what produced
-`results/comparisons/` and `results/sweep_summary.json` (a renamed copy of
-their `outputs/index.json`). Re-running them regenerates the full
-`outputs/<run-name>/` folders these summaries were pulled from.
+**`scripts/run_experiments.py`** is the sweep that established this recipe:
+it compares prompt wording (`"fish"` vs. `"small fish"` vs. `"fish near
+coral"`) and detection threshold, and is what produced
+`results/comparisons/` and `results/sweep_summary.json`. Re-running it
+regenerates the full `outputs/<run-name>/` folders these summaries were
+pulled from.
 
 ## Tracking across the full clip
 
@@ -85,9 +80,11 @@ colored red/orange/green by the stability rule.
 `results/` holds a curated set of outputs referenced above and in
 `KNOWN_LIMITATIONS.md`, small enough to check in directly:
 
-- `results/comparisons/` — before/after frames from the threshold/prompt
-  sweep (`scripts/run_experiments*.py`).
-- `results/sweep_summary.json` — per-run detection stats for that sweep.
+- `results/comparisons/` — annotated frames showing the production ensemble
+  (`ensemble_wbf.py`) and the winning sweep config (`"small fish"` @ 0.3)
+  side by side, at frame 0 and frame 200.
+- `results/sweep_summary.json` — per-run detection stats from
+  `run_experiments.py`'s prompt/threshold sweep.
 - `results/test_clip1_output.mp4` — a pre-rendered
   `scripts/test_sam3_video.py` run, so the native tracker's output can be
   seen without a GPU.
@@ -104,98 +101,46 @@ threshold, or preprocessing combination tried) and why it isn't a quick fix.
 
 ## Investigated but not included
 
-Several approaches were tried, produced a clear negative or superseded
-result, and were deliberately left out of this repo to keep it to what
-actually works. Each is described here instead of shipping the script:
+These were tried and either failed outright or were superseded by what's
+kept above. Documented here instead of shipped as code, so the repo stays
+limited to what actually works:
 
-- **Background-subtraction candidate generation**
-  (would-be `stage1_bg_subtraction.py`) — MOG2 over motion-compensated
-  (ECC-aligned) frames as a SAM3-independent candidate-box generator. Ruled
-  out because this footage isn't static-camera: a diver swims through dense
-  3D coral, so even small camera drift shifts every high-frequency coral
-  edge and the raw MOG2 signal floods with false "motion." The ECC alignment
-  fix contains that, but the approach was abandoned in favor of the
-  prompted-SAM3 + WBF recipe. Not the same issue as the schooling-fish
-  detection miss below — this one is about motion *between* frames, that
-  one's about detection *within* a single frame.
-- **Top-crop tiling for small/distant fish** (would-be
-  `diagnostic_tiling_crop.py`) — cropping to just the region a fish sits in,
-  to give it more effective resolution after SAM3's fixed 1008x1008 resize.
-  Tested directly on the hardest schooling-fish cluster; still missed even at
-  large zoom (see `KNOWN_LIMITATIONS.md`).
-- **IoU+Kalman tracking as the primary tracker** (would-be
-  `track_active_reprompt.py`, `track_full_clip_validation.py`) — a
-  from-scratch SORT-style tracker over independent per-frame WBF detections,
-  later extended with active re-prompting on tracking gaps.
-  `track_full_clip_validation.py` found the single most reliably-detected
-  fish in the clip still fragmented into 3 separate track IDs under pure
-  Kalman-coasting. Superseded entirely by the native-SAM3-session + chunking
-  approach above, which held identity far better without a hand-rolled
-  tracker. `scripts/track_flicker_smoothing.py` (the base Kalman/IoU tracker these
-  build on) *is* kept, but only as plumbing `temporal_stability_filter.py`
-  reuses to get per-track box histories — not as a tracker in its own right.
-- **"High variance positively confirms a real fish" (the flipped
-  hypothesis)** (would-be `diagnostics/chunked_tracker_stability_check.py`,
-  `_masked.py`, `_video.py`) — the temporal-stability filter's validated rule
-  is the negative direction ("barely changes at all" ⇒ probably not a fish).
-  This tested whether the flip also holds. Expected to be weaker going in —
-  underwater footage has non-fish motion sources (light caustics, camera
-  drift, mask-boundary noise on complex coral texture) — and the result was
-  exactly that: mostly confirmed real fish, but with enough ambiguous/fading
-  cases that it wasn't adopted as a standalone rule.
-- **Native-tracker-vs-Kalman as a separate stats pipeline** (would-be
-  `diagnostics/native_tracker_stability.py`, `_tuned.py`, `_video.py`,
-  `render_native_tracker_video_smallfish.py`) — `native_tracker_stability.py`
-  and `_tuned.py` are identical except which cached lifespan file they read;
-  both (plus `_video.py`) depend on `outputs/diagnostics/track_lifespans*.json`
-  from a lifespan-measurement script that isn't included, so they aren't
-  runnable as-is. `render_native_tracker_video_smallfish.py` is the same
-  script as `render_native_tracker_video.py` with the prompt swapped to
-  `"small fish"` (29 vs 24 objects found, comparable 31% vs 42% full-clip
-  survival) — a real but minor variant, not worth a second file.
-- **CLAHE preprocessing on the two-prompt ensemble specifically** (would-be
-  `diagnostics/clahe_ensemble_quickcheck.py`) — narrower version of the same
-  question `ensemble_wbf_clahe.py` answers; consistent with the single-prompt
-  regression already documented in `KNOWN_LIMITATIONS.md`, not a distinct
-  result.
-- **Deep-dive into the stability-score cutoff** (would-be
-  `diagnostics/temporal_stability_deep_dive.py`) — the exploratory pass that
-  arrived at the refined red/orange/green rule (plain score alone wasn't
-  reliable: a low-scoring track could still look like a real fish holding
-  still briefly, and vice versa). Its conclusion is already built into
-  `temporal_stability_video.py`'s coloring rule, so the exploration itself
-  doesn't need to ship separately.
-- **RVRT multi-frame video deblurring** (would-be
-  `diagnostics/rvrt_deblur_diagnostic.py`) — tests whether fusing information
-  across frames (rather than single-frame deblurring, which can't add
-  information a single exposure never captured) recovers structure in the
-  blurred schooling-fish cluster. Excluded because it requires a separate
-  external clone (`JingyunLiang/RVRT`, patched for Python 3.12 —
-  `distutils.version.LooseVersion` → `packaging.version.Version` in
-  `models/network_rvrt.py` and `models/op/deform_attn.py`) plus its own
-  pretrained checkpoints and a CUDA toolkit with `cuda_runtime.h` for its
-  JIT-compiled `deform_attn` extension. Not something to vendor into this
-  repo; reproduce by cloning RVRT, applying that patch, and pointing
-  `CUDA_HOME` at a full toolkit.
-- **NMS/detection-threshold sweeps and per-track lifespan measurement**
-  (would-be `diagnostics/sweep_det_nms_thresh.py`, `sweep_new_det_thresh.py`,
-  `track_lifespans*.py`) — the parameter search that arrived at the
-  thresholds baked into the scripts kept above; the sweep scripts themselves
-  aren't needed to reproduce the result, only their conclusion is.
-- **Point re-prompt recovery** (would-be
-  `diagnostics/point_reprompt_recovery.py`) — SAM3 native point re-prompting
-  as one-shot recovery for a fish RF-DETR (from a separate, unrelated
-  project) kept detecting that SAM3's video tracker lost. Recovery held for
-  roughly 6 frames before dropping again — a limited, not-production-worthy
-  result.
-- **Crop-tagging / reranker training pipeline** (would-be
-  `diagnostics/dump_crops.py`, `tag_crops_server.py`, `train_reranker.py`) —
-  an in-progress detection-reranking approach, not yet a validated part of
-  the pipeline.
-- **Miscellaneous one-off checks** (`cotracker_school_diagnostic.py`,
-  `moving_object_native_check.py`, `moving_object_prompt_quickcheck.py`,
-  `image_vs_video_frame0.py`, `single_image_threshold_check.py`,
-  `verify_video_threshold_fix.py`, `score_report.py`,
-  `flicker_gap_diagnostic.py`, `flicker_rescue_test.py`) — exploratory
-  scripts from the same investigation that didn't produce a result worth
-  keeping in the pipeline.
+- **CLAHE contrast correction**, tested at every stage (single prompt, the
+  full two-prompt ensemble, and a multi-frame spot check) — a consistent net
+  regression: fewer detections overall, and some frames lost more than half
+  their boxes in shadowed coral crevices.
+- **Motion-seeded point prompts** — added a tracked object wherever
+  frame-to-frame motion was detected, on the theory that fish move and coral
+  doesn't. Fails on this footage because the camera itself drifts over
+  complex 3D coral, so large motionless coral formations get flagged as
+  "moving" and tracked as new fish.
+- **Background-subtraction candidate generation** (MOG2 over
+  motion-compensated frames), abandoned for the same reason as motion-seeded
+  points above: a moving camera over complex 3D coral breaks per-pixel
+  motion assumptions, even after compensating for camera motion.
+- **Top-crop tiling for small/distant fish** — cropping to just the region a
+  fish sits in, for more effective resolution after SAM3's fixed 1008x1008
+  resize. Tested directly on the hardest schooling-fish cluster; still
+  missed even at large zoom (see `KNOWN_LIMITATIONS.md`).
+- **A hand-rolled IoU+Kalman tracker as the primary tracker**, later
+  extended with active re-prompting on tracking gaps — even the single most
+  reliably-detected fish in the clip fragmented into 3 separate track IDs.
+  Superseded by the native-SAM3-session + chunking approach above, which
+  held identity far better without a hand-rolled tracker. The base tracker
+  (`scripts/track_flicker_smoothing.py`) is still kept, but only as plumbing
+  the temporal-stability filter reuses to get per-track box histories, not
+  as a tracker in its own right.
+- **RVRT multi-frame video deblurring** — tests whether fusing information
+  across frames recovers structure in the blurred schooling-fish cluster
+  that single-frame methods can't. Excluded because it needs a separate
+  external repo (`JingyunLiang/RVRT`) with its own pretrained checkpoints and
+  CUDA toolkit setup — not something to vendor into this pipeline.
+- **Point re-prompt recovery** — re-prompting SAM3 at a lost fish's
+  last-known location. Recovered identity for about 6 frames before dropping
+  again, too limited to be production-worthy.
+- **A crop-tagging / detection-reranking pipeline** — in progress, not yet a
+  validated part of the pipeline.
+- **A handful of narrower checks** confirming decisions already reflected in
+  the code above: whether high temporal-stability variance alone confirms a
+  real fish (mostly, but with enough ambiguous cases it wasn't adopted as a
+  standalone rule), and native-tracker survival rates across prompts.
